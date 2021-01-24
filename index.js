@@ -26,11 +26,11 @@ function mvcIntegrator(erdEditorFile) {
     fs.readFile(erdEditorFile, function (err, data) {
       if (err || !data) { throw new Error("The file '" + erdEditorFile + "' couldn´t be read. " + err ? err : ""); }
 
-      var defaultPath = erdEditorFile.substring(0, erdEditorFile.lastIndexOf("/") + 1);
+      var mvcIntegratorPath = erdEditorFile.replace(".vuerd.json", ".mvc-integrator");
 
       //Get previous saveOn folders
-      if (fs.existsSync(defaultPath + ".mvc-integrator")) {
-        var mvcIntegratorFile = fs.readFileSync(defaultPath + ".mvc-integrator");
+      if (fs.existsSync(mvcIntegratorPath)) {
+        var mvcIntegratorFile = fs.readFileSync(mvcIntegratorPath);
         var mvcIntegrator = JSON.parse(mvcIntegratorFile);
 
         if (mvcIntegrator.saveOn.length > 0) {
@@ -84,8 +84,8 @@ function makeFirstQuestion(erdEditorFile) {
  */
 function recursiveInteraction(erdEditorFile, saveOn) {
   try {
-    pathReadLine.question("Would you like to add model files in more places? (Y/n): ", (answer) => {
-      if (answer.toLowerCase() != 'n') {
+    pathReadLine.question("Would you like to add model files in more places? (y/N): ", (answer) => {
+      if (answer.toLowerCase() == 'y') {
         pathReadLine.question("Type the new folder to generate the models: ", (answer) => {
           if (answer != "") {
             if (!answer.endsWith("/")) { answer = answer + "/"; }
@@ -124,11 +124,11 @@ function createModelFiles(erdEditorFile, saveOn, addColumnFromRightTableOnLeftTa
     if (!saveOn || saveOn.length == 0) { console.log("You must to indicate a path to save the model files."); return; }
 
     //Search for the mvc-integrator file on the same folder as '.vuerd.json' file
-    var defaultPath = erdEditorFile.substring(0, erdEditorFile.lastIndexOf("/") + 1);
+    var mvcIntegratorPath = erdEditorFile.replace(".vuerd.json", ".mvc-integrator");
     var mvcIntegrator = { previousFilesSaved: [] };
 
-    if (fs.existsSync(defaultPath + ".mvc-integrator")) {
-      var mvcIntegratorFile = fs.readFileSync(defaultPath + ".mvc-integrator");
+    if (fs.existsSync(mvcIntegratorPath)) {
+      var mvcIntegratorFile = fs.readFileSync(mvcIntegratorPath);
       mvcIntegrator = JSON.parse(mvcIntegratorFile);
     }
 
@@ -283,9 +283,9 @@ function createModelFiles(erdEditorFile, saveOn, addColumnFromRightTableOnLeftTa
     });
 
     //Save the work done on the .mvc-integrator file
-    console.log("==> Saving the configuration on " + defaultPath + ".mvc-integrator");
+    console.log("==> Saving the configuration on " + mvcIntegratorPath);
     mvcIntegrator.saveOn = saveOn;
-    fs.writeFileSync(defaultPath + ".mvc-integrator", JSON.stringify(mvcIntegrator));
+    fs.writeFileSync(mvcIntegratorPath, JSON.stringify(mvcIntegrator));
 
     console.log("\nDone!");
     pathReadLine.close();

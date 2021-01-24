@@ -8,9 +8,6 @@ The MVC-Integrator is to help developers to build consistency systems. The tool 
 ## Table of Contents
 
 1. [Getting Started](#getting-started)
-2. [Using](#using)
-3. [Providers](#providers)
-4. [i18n](#i18n) (adding languages)
 
 ## Getting Started
 
