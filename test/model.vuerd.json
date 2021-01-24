@@ -2,8 +2,8 @@
   "canvas": {
     "width": 2000,
     "height": 2000,
-    "scrollTop": 315,
-    "scrollLeft": 117,
+    "scrollTop": 121,
+    "scrollLeft": 429,
     "show": {
       "tableComment": true,
       "columnComment": true,
@@ -537,13 +537,36 @@
               "widthDefault": 60
             },
             "id": "a1d5dbbf-582e-c2da-6536-a9018ebd3387"
+          },
+          {
+            "name": "fkItem2",
+            "comment": "",
+            "dataType": "INT",
+            "default": "",
+            "option": {
+              "autoIncrement": false,
+              "primaryKey": false,
+              "unique": false,
+              "notNull": false
+            },
+            "ui": {
+              "active": false,
+              "pk": false,
+              "fk": true,
+              "pfk": false,
+              "widthName": 60,
+              "widthComment": 60,
+              "widthDataType": 60,
+              "widthDefault": 60
+            },
+            "id": "7df582e9-1f5a-ea80-184e-16c90f88a966"
           }
         ],
         "ui": {
           "active": false,
           "left": 647,
           "top": 248,
-          "zIndex": 484,
+          "zIndex": 493,
           "widthName": 60,
           "widthComment": 60
         },
@@ -831,7 +854,7 @@
           }
         ],
         "ui": {
-          "active": true,
+          "active": false,
           "left": 267,
           "top": 650,
           "zIndex": 489,
@@ -865,7 +888,7 @@
             "a1d5dbbf-582e-c2da-6536-a9018ebd3387"
           ],
           "x": 647,
-          "y": 395.25,
+          "y": 405.5,
           "direction": "left"
         },
         "id": "4d19fd18-d6d5-a783-b6e0-4776f62e1741",
@@ -892,6 +915,29 @@
           "direction": "top"
         },
         "id": "5939de02-e384-8234-1c34-77b666cd6ea2",
+        "relationshipType": "OneN"
+      },
+      {
+        "identification": false,
+        "start": {
+          "tableId": "22e5dece-750f-4043-a28e-c4ba9e8b10be",
+          "columnIds": [
+            "cce01298-0ee3-510f-d080-0ae9605a32ad"
+          ],
+          "x": 981,
+          "y": 248,
+          "direction": "top"
+        },
+        "end": {
+          "tableId": "22e5dece-750f-4043-a28e-c4ba9e8b10be",
+          "columnIds": [
+            "7df582e9-1f5a-ea80-184e-16c90f88a966"
+          ],
+          "x": 1001,
+          "y": 268,
+          "direction": "right"
+        },
+        "id": "c1f12f51-0032-978d-e73f-a008e1666ee7",
         "relationshipType": "OneN"
       }
     ]

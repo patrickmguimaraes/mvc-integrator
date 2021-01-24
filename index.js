@@ -157,7 +157,9 @@ function createModelFiles(erdEditorFile, saveOn, addColumnFromRightTableOnLeftTa
           columnValue = "new " + relationshipsMatrix[column.id].leftTable + "()";
 
           //Save imports on the right table (where the fk is)
-          tablesMatrix[table.id].allImports.push({ class: referenceClass });
+          if(tableName!=referenceClass) {
+            tablesMatrix[table.id].allImports.push({ class: referenceClass });
+          }
 
           //Save the column with the properly name and type
           tablesMatrix[table.id].columns.push({ name: columnName, type: referenceClass, value: columnValue });
@@ -165,7 +167,9 @@ function createModelFiles(erdEditorFile, saveOn, addColumnFromRightTableOnLeftTa
           switch (relationshipsMatrix[column.id].relationshiptType) {
             case "OneN": {
               //Save imports on the left table
-              tablesMatrix[relationshipsMatrix[column.id].leftTableId].allImports.push({ class: tableName });
+              if(tableName!=referenceClass) {
+                tablesMatrix[relationshipsMatrix[column.id].leftTableId].allImports.push({ class: tableName });
+              }
 
               //Save a list colunm on the other side table (left) 
               columnName = columnName + tableName + "List"
