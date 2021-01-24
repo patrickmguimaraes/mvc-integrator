@@ -37,7 +37,7 @@ function mvcIntegrator(erdEditorFile) {
           pathReadLine.question("Would you like to use the previous path(s) folder(s) where were saved the files? \n" + mvcIntegrator.saveOn.toString().replace(",", "\n") + "\n(Y/n): ", (answer) => {
             if (answer.toLowerCase() != 'n') {
               pathReadLine.question("Would you like to add a representative column on the left side of the relationship? (y/N): ", (answer) => {
-                createModelFiles(erdEditorFile, mvcIntegrator.saveOn, (answer == 'N' || answer == 'n') ? false : true);
+                createModelFiles(erdEditorFile, mvcIntegrator.saveOn, answer.toLowerCase() != 'y' ? false : true);
                 return;
               });
             }
