@@ -33,19 +33,20 @@ function mvcIntegrator(erdEditorFile) {
         var mvcIntegratorFile = fs.readFileSync(mvcIntegratorPath);
         var mvcIntegrator = JSON.parse(mvcIntegratorFile);
 
-        if (mvcIntegrator.saveOn.length > 0) {
-          pathReadLine.question("Would you like to use the previous path(s) folder(s) where were saved the files? \n" + mvcIntegrator.saveOn.toString().replace(",", "\n") + "\n(Y/n): ", (answer) => {
-            if (answer.toLowerCase() != 'n') {
-              pathReadLine.question("Would you like to add a representative column on the left side of the relationship? (y/N): ", (answer) => {
-                createModelFiles(erdEditorFile, mvcIntegrator.saveOn, answer.toLowerCase() != 'y' ? false : true);
-                return;
-              });
-            }
-          });
-        }
+        pathReadLine.question("Would you like to use the previous path(s) folder(s) where were saved the files? \n" + mvcIntegrator.saveOn.toString().replace(",", "\n") + "\n(Y/n): ", (answer) => {
+          if (answer.toLowerCase() != 'n') {
+            pathReadLine.question("Would you like to add a representative column on the left side of the relationship? (y/N): ", (answer) => {
+              createModelFiles(erdEditorFile, mvcIntegrator.saveOn, answer.toLowerCase() != 'y' ? false : true);
+            });
+          }
+          else {
+            makeFirstQuestion(erdEditorFile);
+          }
+        });
       }
-
-      makeFirstQuestion(erdEditorFile);
+      else {
+        makeFirstQuestion(erdEditorFile);
+      }
     });
   } catch (error) {
     pathReadLine.close();
@@ -59,7 +60,7 @@ function mvcIntegrator(erdEditorFile) {
  */
 function makeFirstQuestion(erdEditorFile) {
   try {
-    var defaultPath = erdEditorFile.substring(0, erdEditorFile.lastIndexOf("/") + 1);
+    var defaultPath = erdEditorFile.substring(0, erdEditorFile.lastIndexOf("/")) + "/model/";
     var saveOn = [];
 
     pathReadLine.question("Type the main folder to generate the models or press enter to (" + defaultPath + "): ", (answer) => {
@@ -157,7 +158,7 @@ function createModelFiles(erdEditorFile, saveOn, addColumnFromRightTableOnLeftTa
           columnValue = "new " + relationshipsMatrix[column.id].leftTable + "()";
 
           //Save imports on the right table (where the fk is)
-          if(tableName!=referenceClass) {
+          if (tableName != referenceClass) {
             tablesMatrix[table.id].allImports.push({ class: referenceClass });
           }
 
@@ -167,7 +168,7 @@ function createModelFiles(erdEditorFile, saveOn, addColumnFromRightTableOnLeftTa
           switch (relationshipsMatrix[column.id].relationshiptType) {
             case "OneN": {
               //Save imports on the left table
-              if(tableName!=referenceClass) {
+              if (tableName != referenceClass) {
                 tablesMatrix[relationshipsMatrix[column.id].leftTableId].allImports.push({ class: tableName });
               }
 
