@@ -84,14 +84,20 @@ function compareTables(schema, erdEditorFile, saveOn=null) {
     });
   });
 
-  dataBase.query("SELECT TBNAME, NAME, IDENTITY, COLTYPE, LENGTH, NULLS, DEFAULT FROM SYSIBM.SYSCOLUMNS WHERE TBCREATOR = '" + schema + "' ORDER BY TBNAME",
+  var query = "SELECT sysCol.TBNAME, sysCol.NAME, sysCol.IDENTITY, sysCol.COLTYPE, sysCol.LENGTH, sysCol.NULLS, sysCol.DEFAULT, ref.CONSTNAME" +
+              " FROM SYSIBM.SYSCOLUMNS as sysCol" + 
+              " LEFT OUTER JOIN SYSCAT.REFERENCES as ref ON sysCol.NAME=ref.TABNAME" +
+              " WHERE sysCol.TBCREATOR = '" + schema + "'" + 
+              " ORDER BY sysCol.TBNAME";
+
+  dataBase.query(query,
     function (err, data) {
       if (err) { console.log("Sorry, something wrong happended. " + err); return; }
       else if (data == null) { console.log("Any tables found on " + schema + "."); return; }
 
       var tableDb2Matrix = {};
       var key;
-      
+
       data.forEach(column => {
         key = column.TBNAME;
 
@@ -107,6 +113,9 @@ function compareTables(schema, erdEditorFile, saveOn=null) {
       var sqlRemoveTable = "";
       var tableName, pk;
       var exists;
+      var columnType;
+      var bdColumnType = "";
+      var lenght;
       var lastTable = "";
 
       model.table.tables.forEach(table => {
@@ -137,12 +146,41 @@ function compareTables(schema, erdEditorFile, saveOn=null) {
             for (let i = 0; i < tableDb2Matrix[tableName].length; i++) {
               if (column.name.toUpperCase() == tableDb2Matrix[tableName][i].NAME) {
                 exists = true;
+                columnType = getTypeLenght(column.type);
+                bdColumnType = tableDb2Matrix[tableName][i].COLTYPE.trim();
+                lenght = null;
+
+                if (columnType.endsWith(")")) {
+                  lenght = columnType.substring(columnType.indexOf("(") + 1, columnType.indexOf(")"));
+                  columnType = columnType.substring(0, columnType.indexOf("("));
+                }
+                
+                if ((columnType != bdColumnType) || (lenght != null && (lenght != tableDb2Matrix[tableName][i].LENGTH))) {
+                  sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ALTER COLUMN " + column.name + " SET DATA TYPE " + getTypeLenght(column.type) + ";\n"
+                }
+
+                if ((column.notNull && tableDb2Matrix[tableName][i].NULLS == 'Y') || (!column.notNull && tableDb2Matrix[tableName][i].NULLS == 'N')) {
+                  sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ALTER COLUMN " + column.name + " SET " + (column.notNull ? "NOT NULL" : "NULL") + ";\n"
+                }
+
+                if ((column.defaultValue == "" && tableDb2Matrix[tableName][i].DEFAULT != null) || (column.defaultValue != "" && tableDb2Matrix[tableName][i].DEFAULT == null) || (column.defaultValue!="" && tableDb2Matrix[tableName][i].DEFAULT!=null && column.defaultValue != tableDb2Matrix[tableName][i].DEFAULT)) {
+                  sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ALTER COLUMN " + column.name + " SET DEFAULT " + (column.defaultValue == "" ? "null" : column.defaultValue) + ";\n";
+                }
+
                 break;
               }
             }
 
             if (!exists) {
               sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ADD COLUMN " + getColumnSql(column) + ";\n";
+
+              if (column.notNull) {
+                sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ALTER COLUMN " + column.name + " SET NOT NULL;\n"
+              }
+
+              if (column.defaultValue != "") {
+                sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ALTER COLUMN " + column.name + " SET DEFAULT " + column.defaultValue + ";\n";
+              }
 
               if (column.isPk) {
                 sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " DROP PRIMARY KEY;\n"
@@ -159,6 +197,9 @@ function compareTables(schema, erdEditorFile, saveOn=null) {
                 sqlAlterTableForeign = sqlAlterTableForeign + getReferenceClass(schema, table.name, modelMatrix, column);
               }
             }
+            else if (column.referenceClass && column.CONSTNAME == null) { //If exists the column in both places but haven't add a reference
+              sqlAlterTableForeign = sqlAlterTableForeign + getReferenceClass(schema, table.name, modelMatrix, column);
+            }
           });
 
           //Search to remove columns
@@ -173,21 +214,7 @@ function compareTables(schema, erdEditorFile, saveOn=null) {
             }
 
             if (!exists) {
-              if (dbColumn.IDENTITY=="Y") {
-                sqlAlterTableRemove = sqlAlterTableRemove + "\nALTER TABLE " + schema + "." + table.name + " DROP PRIMARY KEY;"
-                sqlAlterTableRemove = sqlAlterTableRemove + "\nALTER TABLE " + schema + "." + table.name + " DROP COLUMN " + dbColumn.NAME + ";";
-
-                sqlAlterTableRemove = sqlAlterTableRemove + "\nALTER TABLE " + schema + "." + table.name + " ADD PRIMARY KEY (";
-
-                modelMatrix[table.name].forEach(columnPrimary => {
-                  if (columnPrimary.isPk) { sqlAlterTableRemove = sqlAlterTableRemove + columnPrimary.name + ","; }
-                });
-
-                sqlAlterTableRemove = (sqlAlterTableRemove.endsWith(",") ? sqlAlterTableRemove.substring(0, sqlAlterTableRemove.length - 1) : sqlAlterTableRemove) + ");";
-              }
-              else {
-                sqlAlterTableRemove = "ALTER TABLE " + schema + "." + table.name + " DROP COLUMN " + dbColumn.NAME + ";\n" + sqlAlterTableRemove;
-              }
+              sqlAlterTableRemove = "ALTER TABLE " + schema + "." + table.name + " DROP COLUMN " + dbColumn.NAME + ";\n" + sqlAlterTableRemove;
             }
           });
         }
@@ -195,17 +222,17 @@ function compareTables(schema, erdEditorFile, saveOn=null) {
 
       //Search to remove tables
       data.forEach(column => {
-        if(lastTable!=column.TBNAME) {
+        if (lastTable != column.TBNAME) {
           exists = false;
 
           for (var i = 0; i < model.table.tables.length; i++) {
-            if(model.table.tables[i].name.toUpperCase()==column.TBNAME.toUpperCase()) {
+            if (model.table.tables[i].name.toUpperCase() == column.TBNAME.toUpperCase()) {
               exists = true;
               break;
             }
           }
 
-          if(!exists) {
+          if (!exists) {
             sqlRemoveTable = sqlRemoveTable + "DROP TABLE " + schema + "." + column.TBNAME + ";\n"
           }
         }
@@ -214,33 +241,33 @@ function compareTables(schema, erdEditorFile, saveOn=null) {
       });
 
       var data = "";
-      if(sqlCreateTable!="") {
-        data = data + "-------------------------------CREATE TABLE-------------------------------\n" + 
-                                                    sqlCreateTable +
-                      "-------------------------------CREATE TABLE-------------------------------\n\n";
+      if (sqlCreateTable != "") {
+        data = data + "-------------------------------CREATE TABLE-------------------------------\n" +
+          sqlCreateTable +
+          "-------------------------------CREATE TABLE-------------------------------\n\n";
       }
-      if(sqlAlterTableForeign!="") {
-        data = data + "-------------------------------FOREIGN KEY--------------------------------\n" + 
-                                                  sqlAlterTableForeign +
-                      "-------------------------------FOREIGN KEY--------------------------------\n\n";
+      if (sqlAlterTableAdd != "") {
+        data = data + "--------------------------------ADD COLUMN--------------------------------\n" +
+          sqlAlterTableAdd +
+          "--------------------------------ADD COLUMN--------------------------------\n\n";
       }
-      if(sqlAlterTableAdd!="") {
-        data = data + "--------------------------------ADD COLUMN--------------------------------\n" + 
-                                                    sqlAlterTableAdd +
-                      "--------------------------------ADD COLUMN--------------------------------\n\n";
+      if (sqlAlterTableRemove != "") {
+        data = data + "-------------------------------DROP COLUMN--------------------------------\n" +
+          sqlAlterTableRemove +
+          "-------------------------------DROP COLUMN--------------------------------\n\n";
       }
-      if(sqlAlterTableRemove!="") {
-        data = data + "-------------------------------DROP COLUMN--------------------------------\n" + 
-                                                  sqlAlterTableRemove +
-                      "-------------------------------DROP COLUMN--------------------------------\n\n";
+      if (sqlAlterTableForeign != "") {
+        data = data + "-------------------------------FOREIGN KEY--------------------------------\n" +
+          sqlAlterTableForeign +
+          "-------------------------------FOREIGN KEY--------------------------------\n\n";
       }
-      if(sqlRemoveTable!="") {
-        data = data + "-------------------------------DROP TABLE---------------------------------\n" + 
-                                                    sqlRemoveTable +
-                      "-------------------------------DROP TABLE---------------------------------\n\n";
+      if (sqlRemoveTable != "") {
+        data = data + "-------------------------------DROP TABLE---------------------------------\n" +
+          sqlRemoveTable +
+          "-------------------------------DROP TABLE---------------------------------\n\n";
       }
-      
-      if(data!="") { data = data.substring(0, data.lenght -2); }
+
+      //if(data!="") { data = data.substring(0, data.lenght-2); }
 
       if (saveOn != null) {
         if (!saveOn.endsWith("/")) { saveOn = saveOn + "/"; }
@@ -296,7 +323,9 @@ function getTypeLenght(columnType) {
 
   switch (columnType) {
     case "VARCHAR":             { return "VARCHAR(255)"; }
-    case "TEXT":                { return "VARCHAR(16320)"; }
+    case "LONGTEXT":            { return "VARCHAR(16320)"; }
+    case "TEXT":                { return "VARCHAR(10000)"; }
+    case "MEDIUMTEXT":          { return "VARCHAR(5000)"; }
     case "BINARY":              { return "BINARY(255)"; }
     case "BLOB":                { return "BLOB(100000000)"; }
     case "CHAR":                { return "CHARACTER(255)"; }
@@ -312,6 +341,8 @@ function getTypeLenght(columnType) {
     case "VARBINARY":           { return "VARBINARY(132704)"; }
     case "GEOMETRY":            { return "GRAPHIC(128)"; }
     case "GEOMETRYCOLLECTION":  { return "VARGRAPHIC(16352)"; }
+
+    case "INT":                 { return "INTEGER"; }
     default: break;
   }
 

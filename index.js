@@ -33,7 +33,7 @@ function mvcIntegrator(erdEditorFile) {
         var mvcIntegratorFile = fs.readFileSync(mvcIntegratorPath);
         var mvcIntegrator = JSON.parse(mvcIntegratorFile);
 
-        pathReadLine.question("Would you like to use the previous path(s) folder(s) where were saved the files? \n" + mvcIntegrator.saveOn.toString().replace(",", "\n") + "\n(Y/n): ", (answer) => {
+        pathReadLine.question("Would you like to use the previous path(s) folder(s) where was (were) saved the files? \n" + mvcIntegrator.saveOn.toString().replace(",", "\n") + "\n(Y/n): ", (answer) => {
           if (answer.toLowerCase() != 'n') {
             pathReadLine.question("Would you like to add a representative column on the left side of the relationship? (y/N): ", (answer) => {
               createModelFiles(erdEditorFile, mvcIntegrator.saveOn, answer.toLowerCase() != 'y' ? false : true);
@@ -327,6 +327,8 @@ function getType(dataType, notNull) {
 
     case "VARCHAR": { return notNull ? "string" : "String"; }
     case "TEXT": { return notNull ? "string" : "String"; }
+    case "LONGTEXT": { return notNull ? "string" : "String"; }
+    case "MEDIUMTEXT": { return notNull ? "string" : "String"; }
     case "BINARY": { return notNull ? "string" : "String"; }
     case "BLOB": { return notNull ? "string" : "String"; }
     case "CHAR": { return notNull ? "string" : "String"; }
