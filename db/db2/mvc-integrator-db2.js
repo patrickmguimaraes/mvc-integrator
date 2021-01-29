@@ -19,11 +19,11 @@ module.exports = exports;
 
 /**
  * Return a promisse with a DB2 dataBase connection based on the parameters 
- * @param {*} DB_DATABASE 
- * @param {*} DB_HOSTNAME 
- * @param {*} DB_PORT 
- * @param {*} DB_UID 
- * @param {*} DB_PWD 
+ * @param {String} DB_DATABASE 
+ * @param {String} DB_HOSTNAME 
+ * @param {String} DB_PORT 
+ * @param {String} DB_UID 
+ * @param {String} DB_PWD 
  */
 function connect(DB_DATABASE, DB_HOSTNAME, DB_PORT, DB_UID, DB_PWD, callback) {
   var connectionSring = "DATABASE=" + DB_DATABASE + ";HOSTNAME=" + DB_HOSTNAME + ";PORT=" + DB_PORT + ";PROTOCOL=TCPIP;UID=" + DB_UID + ";PWD=" + DB_PWD + ";";
@@ -55,34 +55,40 @@ function compareTables(schema, erdEditorFile, saveOn=null) {
   var mainFile = null;
   if (fs.existsSync(erdEditorFile)) { mainFile = fs.readFileSync(erdEditorFile); }
   if (!mainFile) { console.log("The file '" + erdEditorFile + "' couldn´t be read."); return; }
-  var model = JSON.parse(mainFile);
-
+  
+  var model;
   var tableName, columnName, referenceClass, type, notNull, defaultValue, isPk;
-  var tablesMatrix = generateTablesMatrix(model.table.tables);
-  var relationshipsMatrix = generateRelationshipMatrix(tablesMatrix, model.relationship.relationships);
   var modelMatrix = {};
+  var tablesMatrix = {};
+  var relationshipsMatrix = {};
 
-  //Fullfil the tableMatrix with more values (columnName, type...)
-  model.table.tables.forEach(table => {
-    tableName = table.name;
-    modelMatrix[tableName] = [];
+  if (mainFile != null && mainFile != "") {
+    model = JSON.parse(mainFile);
+    tablesMatrix = generateTablesMatrix(model.table.tables);
+    relationshipsMatrix = generateRelationshipMatrix(tablesMatrix, model.relationship.relationships);
 
-    table.columns.forEach(column => {
-      columnName = column.name;
-      type = column.dataType;
-      notNull = column.option.notNull;
-      defaultValue = column.default;
-      isPk = column.option.primaryKey;
+    //Fullfil the tableMatrix with more values (columnName, type...)
+    model.table.tables.forEach(table => {
+      tableName = table.name;
+      modelMatrix[tableName] = [];
 
-      if (column.ui.fk == false) {
-        modelMatrix[tableName].push({ name: columnName, type: type, notNull: notNull, defaultValue: defaultValue, isPk: isPk, referenceClass: null });
-      }
-      else {
-        referenceClass = relationshipsMatrix[column.id].leftTable;
-        modelMatrix[tableName].push({ name: columnName, type: type, notNull: notNull, defaultValue: defaultValue, isPk: false, referenceClass: referenceClass });
-      }
+      table.columns.forEach(column => {
+        columnName = column.name;
+        type = column.dataType;
+        notNull = column.option.notNull;
+        defaultValue = column.default;
+        isPk = column.option.primaryKey;
+
+        if (column.ui.fk == false) {
+          modelMatrix[tableName].push({ name: columnName, type: type, notNull: notNull, defaultValue: defaultValue, isPk: isPk, referenceClass: null });
+        }
+        else {
+          referenceClass = relationshipsMatrix[column.id].leftTable;
+          modelMatrix[tableName].push({ name: columnName, type: type, notNull: notNull, defaultValue: defaultValue, isPk: false, referenceClass: referenceClass });
+        }
+      });
     });
-  });
+  }
 
   var query = "SELECT sysCol.TBNAME, sysCol.NAME, sysCol.IDENTITY, sysCol.COLTYPE, sysCol.LENGTH, sysCol.NULLS, sysCol.DEFAULT, ref.CONSTNAME" +
               " FROM SYSIBM.SYSCOLUMNS as sysCol" + 
@@ -93,8 +99,7 @@ function compareTables(schema, erdEditorFile, saveOn=null) {
   dataBase.query(query,
     function (err, data) {
       if (err) { console.log("Sorry, something wrong happended. " + err); return; }
-      else if (data == null) { console.log("Any tables found on " + schema + "."); return; }
-
+    
       var tableDb2Matrix = {};
       var key;
 
@@ -118,117 +123,121 @@ function compareTables(schema, erdEditorFile, saveOn=null) {
       var lenght;
       var lastTable = "";
 
-      model.table.tables.forEach(table => {
-        tableName = table.name.toUpperCase();
-        pk = null;
+      if (model != null && model.table != null && model.table.tables != null) {
+        model.table.tables.forEach(table => {
+          tableName = table.name.toUpperCase();
+          pk = null;
 
-        if (tableDb2Matrix[tableName] == null) { //Create new tables
-          sqlCreateTable = sqlCreateTable + "CREATE TABLE " + schema + "." + table.name + "(\n";
+          if (tableDb2Matrix[tableName] == null) { //Create new tables
+            sqlCreateTable = sqlCreateTable + "CREATE TABLE " + schema + "." + table.name + "(\n";
 
-          modelMatrix[table.name].forEach(column => {
-            sqlCreateTable = sqlCreateTable + "   " + getColumnSql(column) + ",\n";
+            modelMatrix[table.name].forEach(column => {
+              sqlCreateTable = sqlCreateTable + "   " + getColumnSql(column) + ",\n";
 
-            if (column.isPk) { pk = column.name; }
-
-            if (column.referenceClass) {
-              sqlAlterTableForeign = sqlAlterTableForeign + getReferenceClass(schema, table.name, modelMatrix, column);
-            }
-          });
-
-          if (pk != null) { sqlCreateTable = sqlCreateTable + "   PRIMARY KEY(" + pk + ")\n"; }
-          sqlCreateTable = sqlCreateTable + ");\n\n";
-        }
-        else {
-          //Search to add new columns
-          modelMatrix[table.name].forEach(column => {
-            exists = false;
-
-            for (let i = 0; i < tableDb2Matrix[tableName].length; i++) {
-              if (column.name.toUpperCase() == tableDb2Matrix[tableName][i].NAME) {
-                exists = true;
-                columnType = getTypeLenght(column.type);
-                bdColumnType = tableDb2Matrix[tableName][i].COLTYPE.trim();
-                lenght = null;
-
-                if (columnType.endsWith(")")) {
-                  lenght = columnType.substring(columnType.indexOf("(") + 1, columnType.indexOf(")"));
-                  columnType = columnType.substring(0, columnType.indexOf("("));
-                }
-                
-                if ((columnType != bdColumnType) || (lenght != null && (lenght != tableDb2Matrix[tableName][i].LENGTH))) {
-                  sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ALTER COLUMN " + column.name + " SET DATA TYPE " + getTypeLenght(column.type) + ";\n"
-                }
-
-                if ((column.notNull && tableDb2Matrix[tableName][i].NULLS == 'Y') || (!column.notNull && tableDb2Matrix[tableName][i].NULLS == 'N')) {
-                  sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ALTER COLUMN " + column.name + " SET " + (column.notNull ? "NOT NULL" : "NULL") + ";\n"
-                }
-
-                if ((column.defaultValue == "" && tableDb2Matrix[tableName][i].DEFAULT != null) || (column.defaultValue != "" && tableDb2Matrix[tableName][i].DEFAULT == null) || (column.defaultValue!="" && tableDb2Matrix[tableName][i].DEFAULT!=null && column.defaultValue != tableDb2Matrix[tableName][i].DEFAULT)) {
-                  sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ALTER COLUMN " + column.name + " SET DEFAULT " + (column.defaultValue == "" ? "null" : column.defaultValue) + ";\n";
-                }
-
-                break;
-              }
-            }
-
-            if (!exists) {
-              sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ADD COLUMN " + getColumnSql(column) + ";\n";
-
-              if (column.notNull) {
-                sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ALTER COLUMN " + column.name + " SET NOT NULL;\n"
-              }
-
-              if (column.defaultValue != "") {
-                sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ALTER COLUMN " + column.name + " SET DEFAULT " + column.defaultValue + ";\n";
-              }
-
-              if (column.isPk) {
-                sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " DROP PRIMARY KEY;\n"
-                sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ADD PRIMARY KEY (";
-
-                modelMatrix[table.name].forEach(columnPrimary => {
-                  if (columnPrimary.isPk) { sqlAlterTableAdd = sqlAlterTableAdd + columnPrimary.name + ","; }
-                });
-
-                sqlAlterTableAdd = (sqlAlterTableAdd.endsWith(",") ? sqlAlterTableAdd.substring(0, sqlAlterTableAdd.length - 1) : sqlAlterTableAdd) + ");\n";
-              }
+              if (column.isPk) { pk = column.name; }
 
               if (column.referenceClass) {
                 sqlAlterTableForeign = sqlAlterTableForeign + getReferenceClass(schema, table.name, modelMatrix, column);
               }
-            }
-            else if (column.referenceClass && column.CONSTNAME == null) { //If exists the column in both places but haven't add a reference
-              sqlAlterTableForeign = sqlAlterTableForeign + getReferenceClass(schema, table.name, modelMatrix, column);
-            }
-          });
+            });
 
-          //Search to remove columns
-          tableDb2Matrix[tableName].forEach(dbColumn => {
-            exists = false;
+            if (pk != null) { sqlCreateTable = sqlCreateTable + "   PRIMARY KEY(" + pk + ")\n"; }
+            sqlCreateTable = sqlCreateTable + ");\n\n";
+          }
+          else {
+            //Search to add new columns
+            modelMatrix[table.name].forEach(column => {
+              exists = false;
 
-            for (var i = 0; i < modelMatrix[table.name].length; i++) {
-              if (dbColumn.NAME == modelMatrix[table.name][i].name.toUpperCase()) {
-                exists = true;
-                break;
+              for (let i = 0; i < tableDb2Matrix[tableName].length; i++) {
+                if (column.name.toUpperCase() == tableDb2Matrix[tableName][i].NAME) {
+                  exists = true;
+                  columnType = getTypeLenght(column.type);
+                  bdColumnType = tableDb2Matrix[tableName][i].COLTYPE.trim();
+                  lenght = null;
+
+                  if (columnType.endsWith(")")) {
+                    lenght = columnType.substring(columnType.indexOf("(") + 1, columnType.indexOf(")"));
+                    columnType = columnType.substring(0, columnType.indexOf("("));
+                  }
+
+                  if ((columnType != bdColumnType) || (lenght != null && (lenght != tableDb2Matrix[tableName][i].LENGTH))) {
+                    sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ALTER COLUMN " + column.name + " SET DATA TYPE " + getTypeLenght(column.type) + ";\n"
+                  }
+
+                  if ((column.notNull && tableDb2Matrix[tableName][i].NULLS == 'Y') || (!column.notNull && tableDb2Matrix[tableName][i].NULLS == 'N')) {
+                    sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ALTER COLUMN " + column.name + " SET " + (column.notNull ? "NOT NULL" : "NULL") + ";\n"
+                  }
+
+                  if ((column.defaultValue == "" && tableDb2Matrix[tableName][i].DEFAULT != null) || (column.defaultValue != "" && tableDb2Matrix[tableName][i].DEFAULT == null) || (column.defaultValue != "" && tableDb2Matrix[tableName][i].DEFAULT != null && column.defaultValue != tableDb2Matrix[tableName][i].DEFAULT)) {
+                    sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ALTER COLUMN " + column.name + " SET DEFAULT " + (column.defaultValue == "" ? "null" : column.defaultValue) + ";\n";
+                  }
+
+                  break;
+                }
               }
-            }
 
-            if (!exists) {
-              sqlAlterTableRemove = "ALTER TABLE " + schema + "." + table.name + " DROP COLUMN " + dbColumn.NAME + ";\n" + sqlAlterTableRemove;
-            }
-          });
-        }
-      });
+              if (!exists) {
+                sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ADD COLUMN " + getColumnSql(column) + ";\n";
+
+                if (column.notNull) {
+                  sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ALTER COLUMN " + column.name + " SET NOT NULL;\n"
+                }
+
+                if (column.defaultValue != "") {
+                  sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ALTER COLUMN " + column.name + " SET DEFAULT " + column.defaultValue + ";\n";
+                }
+
+                if (column.isPk) {
+                  sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " DROP PRIMARY KEY;\n"
+                  sqlAlterTableAdd = sqlAlterTableAdd + "ALTER TABLE " + schema + "." + table.name + " ADD PRIMARY KEY (";
+
+                  modelMatrix[table.name].forEach(columnPrimary => {
+                    if (columnPrimary.isPk) { sqlAlterTableAdd = sqlAlterTableAdd + columnPrimary.name + ","; }
+                  });
+
+                  sqlAlterTableAdd = (sqlAlterTableAdd.endsWith(",") ? sqlAlterTableAdd.substring(0, sqlAlterTableAdd.length - 1) : sqlAlterTableAdd) + ");\n";
+                }
+
+                if (column.referenceClass) {
+                  sqlAlterTableForeign = sqlAlterTableForeign + getReferenceClass(schema, table.name, modelMatrix, column);
+                }
+              }
+              else if (column.referenceClass && column.CONSTNAME == null) { //If exists the column in both places but haven't add a reference
+                sqlAlterTableForeign = sqlAlterTableForeign + getReferenceClass(schema, table.name, modelMatrix, column);
+              }
+            });
+
+            //Search to remove columns
+            tableDb2Matrix[tableName].forEach(dbColumn => {
+              exists = false;
+
+              for (var i = 0; i < modelMatrix[table.name].length; i++) {
+                if (dbColumn.NAME == modelMatrix[table.name][i].name.toUpperCase()) {
+                  exists = true;
+                  break;
+                }
+              }
+
+              if (!exists) {
+                sqlAlterTableRemove = "ALTER TABLE " + schema + "." + table.name + " DROP COLUMN " + dbColumn.NAME + ";\n" + sqlAlterTableRemove;
+              }
+            });
+          }
+        });
+      }
 
       //Search to remove tables
       data.forEach(column => {
         if (lastTable != column.TBNAME) {
           exists = false;
 
-          for (var i = 0; i < model.table.tables.length; i++) {
-            if (model.table.tables[i].name.toUpperCase() == column.TBNAME.toUpperCase()) {
-              exists = true;
-              break;
+          if (model != null && model.table != null && model.table.tables != null) {
+            for (var i = 0; i < model.table.tables.length; i++) {
+              if (model.table.tables[i].name.toUpperCase() == column.TBNAME.toUpperCase()) {
+                exists = true;
+                break;
+              }
             }
           }
 

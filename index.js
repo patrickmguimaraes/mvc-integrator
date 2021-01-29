@@ -33,7 +33,7 @@ function mvcIntegrator(erdEditorFile) {
         var mvcIntegratorFile = fs.readFileSync(mvcIntegratorPath);
         var mvcIntegrator = JSON.parse(mvcIntegratorFile);
 
-        pathReadLine.question("Would you like to use the previous path(s) folder(s) where was (were) saved the files? \n" + mvcIntegrator.saveOn.toString().replace(",", "\n") + "\n(Y/n): ", (answer) => {
+        pathReadLine.question("Would you like to use the previous path(s) folder(s) where were saved the files? \n" + mvcIntegrator.saveOn.toString().replace(",", "\n") + "\n(Y/n): ", (answer) => {
           if (answer.toLowerCase() != 'n') {
             pathReadLine.question("Would you like to add a representative column on the left side of the relationship? (y/N): ", (answer) => {
               createModelFiles(erdEditorFile, mvcIntegrator.saveOn, answer.toLowerCase() != 'y' ? false : true);
@@ -147,7 +147,7 @@ function createModelFiles(erdEditorFile, saveOn, addColumnFromRightTableOnLeftTa
         if (column.ui.fk == false) {
           columnName = column.name;
           referenceClass = getType(column.dataType, column.option.notNull);
-          columnValue = column.default != "" ? column.default : getInitialValue(column.dataType);
+          columnValue = column.default != "" ? getDefaultValue(column.dataType, column.default) : getInitialValue(column.dataType);
 
           tablesMatrix[table.id].columns.push({ name: columnName, type: referenceClass, value: columnValue });
         }
@@ -376,13 +376,26 @@ function getInitialValue(dataType) {
     case "DECIMAL": { return "0.0"; }
     case "FLOAT": { return "0.0"; }
 
-    case "DATE": { return "new Date()"; }
-    case "DATETIME": { return "new Date(new Date().setHours(12, 0, 0, 0))"; }
+    case "DATETIME": { return "new Date()"; }
+    case "DATE": { return "new Date(new Date().setHours(12, 0, 0, 0))"; }
 
     default: break;
   }
 
   return null;
+}
+
+/**
+ * Get the default value
+ * @param {String} dataType - Datatype of the column
+ * @param {any} defaultValue - Default value
+ */
+function getDefaultValue(dataType, defaultValue) {
+  if((dataType=="DATETIME" || dataType=="TIMESTAMP") && defaultValue=="CURRENT_TIMESTAMP") {
+    return "new Date()";
+  }
+
+  return defaultValue;
 }
 
 /**
